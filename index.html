@@ -1,12 +1,181 @@
+# wz-do-corte
 <!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>WZ do Corte</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+<meta charset="UTF-8">
+<title>WZ do Corte | Sistema Profissional</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body{margin:0;font-family:Arial;background:#000;color:#fff}
+header{text-align:center;padding:20px;border-bottom:2px solid gold}
+h1{color:gold;margin:0}
+.admin-btn{position:fixed;top:10px;right:10px;font-size:12px;background:#111;color:gold;border:1px solid gold;padding:6px 10px;border-radius:20px}
+.container{max-width:900px;margin:auto;padding:20px}
+.card{background:#111;border:1px solid gold;border-radius:10px;padding:20px;margin-bottom:20px}
+input,select,button{width:100%;padding:10px;margin-top:5px;background:#222;color:#fff;border:none;border-radius:5px}
+button{background:gold;color:#000;font-weight:bold}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px}
+.slot{padding:15px;border-radius:10px;text-align:center}
+.livre{background:#0a5}
+.ocupado{background:#a00}
+#login,#painel{display:none}
+.ag-card{background:#000;border:1px solid gold;border-radius:10px;padding:10px;margin-bottom:10px}
+</style>
+</head>
+
+<body>
+
+<button class="admin-btn" onclick="abrirLogin()">Sou barbeiro</button>
+
+<header>
+<h1>💈 WZ DO CORTE</h1>
+<p>Agendamento Online Profissional</p>
+</header>
+
+<div class="container">
+
+<div class="card">
+<h2>📅 Agendar Horário</h2>
+<input id="nome" placeholder="Seu nome">
+<input type="date" id="data" onchange="renderHorarios()">
+<select id="hora"></select>
+
+<label><input type="checkbox" value="Corte"> Corte</label>
+<label><input type="checkbox" value="Barba"> Barba</label>
+<label><input type="checkbox" value="Nevou"> Nevou</label>
+
+<select id="pagamento">
+<option>Pix</option>
+<option>Cartão</option>
+<option>Espécie</option>
+</select>
+
+<button onclick="agendar()">Confirmar</button>
+</div>
+
+<div class="card">
+<h2>⏰ Horários</h2>
+<div id="grid" class="grid"></div>
+</div>
+
+</div>
+
+<!-- LOGIN BARBEIRO -->
+<div id="login" class="card">
+<h2>🔐 Login do Barbeiro</h2>
+<input id="email" placeholder="Email">
+<input id="senha" type="password" placeholder="Senha">
+<button onclick="login()">Entrar</button>
+</div>
+
+<!-- PAINEL -->
+<div id="painel" class="container">
+<h2>📊 Painel do Barbeiro</h2>
+<div id="listaAdmin"></div>
+<button onclick="logout()">Sair</button>
+</div>
+
+<!-- FIREBASE -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+/* 🔥 COLE SEU firebaseConfig AQUI */
+const firebaseConfig = {
+  apiKey: "SUA_API_KEY",
+  authDomain: "SEU_DOMINIO.firebaseapp.com",
+  projectId: "SEU_PROJECT_ID",
+  storageBucket: "SEU_BUCKET.appspot.com",
+  messagingSenderId: "XXXX",
+  appId: "XXXX"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+const horarios=[];
+function gerarHorarios(){
+for(let h=9;h<=19;h++){
+for(let m=0;m<60;m+=20){
+let hr=`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+if(hr<"09:30"||(hr>="12:00"&&hr<"14:00")||hr>="20:00")continue;
+horarios.push(hr);
+hora.innerHTML+=`<option>${hr}</option>`;
+}}}
+gerarHorarios();
+
+window.renderHorarios = async ()=>{
+grid.innerHTML="";
+const data=dataInput.value;
+const q=query(collection(db,"agendamentos"),where("data","==",data));
+const snap=await getDocs(q);
+const ocupados=snap.docs.map(d=>d.data().hora);
+horarios.forEach(h=>{
+grid.innerHTML+=`
+<div class="slot ${ocupados.includes(h)?"ocupado":"livre"}">
+${h}<br>${ocupados.includes(h)?"Ocupado":"Livre"}
+</div>`;
+});
+};
+
+window.agendar = async ()=>{
+await addDoc(collection(db,"agendamentos"),{
+nome:nome.value,
+data:dataInput.value,
+hora:hora.value,
+servicos:[...document.querySelectorAll("input[type=checkbox]:checked")].map(s=>s.value),
+pagamento:pagamento.value,
+criado:new Date()
+});
+alert("Agendamento realizado!");
+renderHorarios();
+};
+
+window.abrirLogin=()=>login.style.display="block";
+
+window.login=()=>{
+signInWithEmailAndPassword(auth,email.value,senha.value)
+.then(()=>{login.style.display="none";})
+.catch(()=>alert("Login inválido"));
+};
+
+window.logout=()=>signOut(auth);
+
+onAuthStateChanged(auth,user=>{
+if(user){
+painel.style.display="block";
+carregarAdmin();
+}else{
+painel.style.display="none";
+}
+});
+
+async function carregarAdmin(){
+listaAdmin.innerHTML="";
+const snap=await getDocs(collection(db,"agendamentos"));
+snap.forEach(doc=>{
+const a=doc.data();
+listaAdmin.innerHTML+=`
+<div class="ag-card">
+📅 ${a.data} ⏰ ${a.hora}<br>
+👤 ${a.nome}<br>
+✂️ ${a.servicos.join(", ")}<br>
+💳 ${a.pagamento}
+</div>`;
+});
+}
+</script>
+
+</body>
 </html>
+const firebaseConfig = {
+  apiKey: "...",
+  authDomain: "...",
+  projectId: "...",
+  storageBucket: "...",
+  messagingSenderId: "...",
+  appId: "..."
+};
